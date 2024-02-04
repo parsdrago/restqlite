@@ -6,10 +6,14 @@ app = FastAPI()
 
 DATABASE_PATH = "test.db"
 
-@app.get("/{table_name}")
-async def get_data(table_name: str, request: Request):
+def get_db():
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
+    return conn
+
+@app.get("/{table_name}")
+async def get_data(table_name: str, request: Request):
+    conn = get_db()
     cursor = conn.cursor()
 
     # check if table exists
