@@ -25,8 +25,15 @@ async def get_data(table_name: str, request: Request):
             conn.close()
             return Response(status_code=400)
 
-    where_clause = " AND ".join([f"{key}='{value}'" for key, value in request.query_params.items()])
-    cursor.execute(f"SELECT * FROM {table_name} WHERE {where_clause}")
+    # to prevent SQL injection, we use parameterized queries
+    if not request.query_params:
+        cursor.execute(f"SELECT * FROM {table_name}")
+        data = cursor.fetchall()
+        conn.close()
+        return {"data": [dict(row) for row in data]}
+
+    where_clause = " AND ".join([f"{key}=?" for key in request.query_params.keys()])
+    cursor.execute(f"SELECT * FROM {table_name} WHERE {where_clause}", list(request.query_params.values()))
     data = cursor.fetchall()
     conn.close()
     return {"data": [dict(row) for row in data]}
