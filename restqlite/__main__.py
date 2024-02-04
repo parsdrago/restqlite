@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, Request
+from fastapi import FastAPI, Response, Request, Depends
 from uvicorn import run
 import sqlite3
 
@@ -7,13 +7,12 @@ app = FastAPI()
 DATABASE_PATH = "test.db"
 
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
 @app.get("/{table_name}")
-async def get_data(table_name: str, request: Request):
-    conn = get_db()
+async def get_data(table_name: str, request: Request, conn = Depends(get_db)):
     cursor = conn.cursor()
 
     # check if table exists
@@ -47,4 +46,5 @@ async def get_data(table_name: str, request: Request):
 async def root():
     return {"message": "Hello World"}
 
-run(app, host="0.0.0.0", port=8000)
+if __name__ == "__main__":
+    run(app, host="0.0.0.0")
