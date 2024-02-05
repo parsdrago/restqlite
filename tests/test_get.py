@@ -86,7 +86,6 @@ def test_get_data_with_injection_table_name(set_test_database):
 def test_post_data(set_test_database):
     response = client.post("/test", json={"id": 3, "name": "Charlie", "age": 35})
     assert response.status_code == 201
-    print(response.json())
     assert response.json() == {"id": 3, "name": "Charlie", "age": 35}
 
     response = client.get("/test")
