@@ -5,16 +5,14 @@ This module contains the FastAPI application and the main function to run the se
 
 import argparse
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from uvicorn import run
-
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
-from datetime import datetime, timedelta, UTC
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from uvicorn import run
 
 app = FastAPI()
 
@@ -117,9 +115,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), conn=Depends(g
         return Response(status_code=404)
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": form_data.username}, expires_delta=access_token_expires
-    )
+    access_token = create_access_token(data={"sub": form_data.username}, expires_delta=access_token_expires)
     conn.close()
     return {"access_token": access_token, "token_type": "bearer"}
 
