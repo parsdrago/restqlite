@@ -1,4 +1,5 @@
 import os
+import random
 import sqlite3
 
 import pytest
@@ -8,11 +9,17 @@ from restqlite.__main__ import app, get_db
 
 client = TestClient(app)
 
-TEMP_DB = "temp-test.db"
+
+def get_random_string():
+    return "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=10))
 
 
-def create_test_db():
-    conn = sqlite3.connect(TEMP_DB)
+TEMP_DB = f"{get_random_string()}.db"
+
+
+def create_test_db(db_name):
+    # make temporary database with random name
+    conn = sqlite3.connect(db_name, check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
     cursor.execute("INSERT INTO test (name, age) VALUES ('Alice', 25)")
@@ -25,7 +32,7 @@ def create_test_db():
 
 @pytest.fixture(autouse=True)
 def set_test_database():
-    create_test_db()
+    create_test_db(TEMP_DB)
     yield
     try:
         os.remove(TEMP_DB)
