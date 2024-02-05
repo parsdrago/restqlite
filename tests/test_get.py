@@ -211,3 +211,44 @@ def test_put_data_with_injection(set_test_database):
             {"id": 2, "name": "Bob", "age": 30},
         ]
     }
+
+
+def test_delete_data(set_test_database):
+    response = client.delete("/test/1")
+    assert response.status_code == 204
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_delete_data_with_invalid_table(set_test_database):
+    response = client.delete("/invalid/1")
+    assert response.status_code == 404
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_delete_data_with_invalid_id(set_test_database):
+    response = client.delete("/test/3")
+    assert response.status_code == 404
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }

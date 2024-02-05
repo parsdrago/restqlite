@@ -167,6 +167,39 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
 
     return {"id": id, **dict(updated_data)}
 
+
+@app.delete("/{table_name}/{id}")
+async def delete_data(table_name: str, id: int, conn=Depends(get_db)):
+    """Delete data from a table in the database.
+
+    Args:
+        table_name (str): The name of the table.
+        id (int): The id of the row to delete.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        Response: The response object. If the table does not exist, return 404. If the row does not exist, return 404. Otherwise, return 204.
+    """
+    cursor = conn.cursor()
+
+    # check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    # check if the row exists
+    cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    cursor.execute(f"DELETE FROM {table_name} WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return Response(status_code=204)
+
+
 def main():
     global DATABASE_PATH
 
