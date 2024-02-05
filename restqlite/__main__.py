@@ -68,10 +68,5 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     return {"data": [dict(row) for row in data]}
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
 if __name__ == "__main__":
     run(app, host="0.0.0.0")
