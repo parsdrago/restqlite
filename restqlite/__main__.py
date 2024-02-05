@@ -16,7 +16,7 @@ async def get_data(table_name: str, request: Request, conn = Depends(get_db)):
     cursor = conn.cursor()
 
     # check if table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
     if not cursor.fetchone():
         conn.close()
         return Response(status_code=404)
