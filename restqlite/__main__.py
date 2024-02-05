@@ -3,13 +3,15 @@
 This module contains the FastAPI application and the main function to run the server.
 """
 
-from fastapi import FastAPI, Response, Request, Depends
-from uvicorn import run
 import sqlite3
+
+from fastapi import Depends, FastAPI, Request, Response
+from uvicorn import run
 
 app = FastAPI()
 
 DATABASE_PATH = "test.db"
+
 
 def get_db():
     """Get a connection to the database.
@@ -21,8 +23,9 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+
 @app.get("/{table_name}")
-async def get_data(table_name: str, request: Request, conn = Depends(get_db)):
+async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     """Get data from a table in the database.
 
     Args:
@@ -56,7 +59,10 @@ async def get_data(table_name: str, request: Request, conn = Depends(get_db)):
         return {"data": [dict(row) for row in data]}
 
     where_clause = " AND ".join([f"{key}=?" for key in request.query_params.keys()])
-    cursor.execute(f"SELECT * FROM {table_name} WHERE {where_clause}", list(request.query_params.values()))
+    cursor.execute(
+        f"SELECT * FROM {table_name} WHERE {where_clause}",
+        list(request.query_params.values()),
+    )
     data = cursor.fetchall()
     conn.close()
     return {"data": [dict(row) for row in data]}
@@ -65,6 +71,7 @@ async def get_data(table_name: str, request: Request, conn = Depends(get_db)):
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
 
 if __name__ == "__main__":
     run(app, host="0.0.0.0")

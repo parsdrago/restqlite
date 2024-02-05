@@ -14,7 +14,16 @@ uvicorn = "^0.27.0.post1"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 httpx = "^0.26.0"
+black = "^24.1.1"
+isort = "^5.13.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.black]
+line-length = 120
