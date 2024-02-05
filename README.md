@@ -55,6 +55,15 @@ You can interact with the database using the following RESTful API:
 }
 ```
 
+- **Update item**: `PUT /items/1`
+
+```json
+{
+    "name": "Item 1",
+    "price": 20.0
+}
+```
+
 ## License
 
 restqlite is licensed under the MIT License. See [LICENSE](LICENSE) for the full license text.

@@ -117,6 +117,56 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
     return JSONResponse(status_code=201, content=data)
 
 
+@app.put("/{table_name}/{id}")
+async def update_data(table_name: str, id: int, request: Request, conn=Depends(get_db)):
+    """Update data in a table in the database.
+
+    Args:
+        table_name (str): The name of the table.
+        id (int): The id of the row to update.
+        request (Request): The request object.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        Response: The response object. If the table does not exist, return 404. If the row does not exist, return 404. If the data contains invalid columns, return 400. Otherwise, return 200 with the updated data.
+    """
+    cursor = conn.cursor()
+
+    # check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    data = await request.json()
+
+    # check if the row exists
+    cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    # check if the data contains valid columns
+    valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
+    for key in data.keys():
+        if key not in valid_columns:
+            conn.close()
+            return Response(status_code=400)
+
+    set_clause = ", ".join([f"{key}=?" for key in data.keys()])
+    cursor.execute(
+        f"UPDATE {table_name} SET {set_clause} WHERE id=?",
+        list(data.values()) + [id],
+    )
+    conn.commit()
+
+    # return the updated data
+    cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
+    updated_data = cursor.fetchone()
+    conn.close()
+
+    return {"id": id, **dict(updated_data)}
+
 def main():
     global DATABASE_PATH
 

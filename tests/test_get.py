@@ -139,3 +139,75 @@ def test_post_data_with_injection(set_test_database):
             {"id": 2, "name": "Bob", "age": 30},
         ]
     }
+
+
+def test_put_data(set_test_database):
+    response = client.put("/test/1", json={"name": "Alice", "age": 26})
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "Alice", "age": 26}
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 26},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_put_data_with_invalid_table(set_test_database):
+    response = client.put("/invalid/1", json={"name": "Alice", "age": 26})
+    assert response.status_code == 404
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_put_data_with_invalid_id(set_test_database):
+    response = client.put("/test/3", json={"name": "Alice", "age": 26})
+    assert response.status_code == 404
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_put_data_with_invalid_columns(set_test_database):
+    response = client.put("/test/1", json={"name": "Alice", "invalid": 26})
+    assert response.status_code == 400
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_put_data_with_injection(set_test_database):
+    response = client.put("/test/1", json={"name": "Alice); DROP TABLE test; --", "age": 26})
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "Alice); DROP TABLE test; --", "age": 26}
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice); DROP TABLE test; --", "age": 26},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
