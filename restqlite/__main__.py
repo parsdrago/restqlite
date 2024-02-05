@@ -25,6 +25,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 DATABASE_PATH = None
 
+RESERVED_TABLES = ["sqlite_master", "sqlite_sequence", "_users"]
 
 def get_db():
     """Get a connection to the database.
@@ -140,6 +141,10 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
         conn.close()
         return Response(status_code=404)
 
+    if table_name in RESERVED_TABLES:
+        conn.close()
+        return Response(status_code=400)
+
     # check if query parameters are valid
     valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
     for key in request.query_params.keys():
@@ -183,6 +188,10 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
     if not cursor.fetchone():
         conn.close()
         return Response(status_code=404)
+
+    if table_name in RESERVED_TABLES:
+        conn.close()
+        return Response(status_code=400)
 
     data = await request.json()
 
@@ -231,6 +240,10 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
     if not cursor.fetchone():
         conn.close()
         return Response(status_code=404)
+
+    if table_name in RESERVED_TABLES:
+        conn.close()
+        return Response(status_code=400)
 
     data = await request.json()
 
@@ -281,6 +294,10 @@ async def delete_data(table_name: str, id: int, conn=Depends(get_db)):
     if not cursor.fetchone():
         conn.close()
         return Response(status_code=404)
+
+    if table_name in RESERVED_TABLES:
+        conn.close()
+        return Response(status_code=400)
 
     # check if the row exists
     cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
