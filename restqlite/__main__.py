@@ -106,6 +106,13 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
         list(data.values()),
     )
     conn.commit()
+
+    # if id is auto-incremented, return the id of the new row
+    new_id = cursor.lastrowid
+    if new_id:
+        conn.close()
+        return JSONResponse(status_code=201, content={"id": new_id, **data})
+
     conn.close()
     return JSONResponse(status_code=201, content=data)
 
