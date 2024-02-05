@@ -1,5 +1,9 @@
 # restqlite
 
+> ![note]
+>
+> This project is under development and is not ready for production use. This may contain bugs and security vulnerabilities. Use at your own risk.
+
 restqlite is a simple REST API for SQLite databases. It is a thin layer over SQLite and provides a RESTful interface for interacting with SQLite databases. It is designed to be easy to use and easy to deploy.
 
 ## Features
