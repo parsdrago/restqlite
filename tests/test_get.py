@@ -52,3 +52,16 @@ def test_get_data_with_invalid_query_params(set_test_database):
 def test_get_data_with_invalid_table(set_test_database):
     response = client.get("/invalid")
     assert response.status_code == 404
+
+def test_get_data_with_injection_query(set_test_database):
+    response = client.get("/test?name=Alice' OR '1'='1")
+    assert response.status_code == 200
+    assert response.json() == {"data": []}
+
+def test_get_data_with_injection_key_name(set_test_database):
+    response = client.get("/test?name' OR '1'='1")
+    assert response.status_code == 400
+
+def test_get_data_with_injection_table_name(set_test_database):
+    response = client.get("/test; DROP TABLE test")
+    assert response.status_code == 404
