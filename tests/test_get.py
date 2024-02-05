@@ -81,3 +81,62 @@ def test_get_data_with_injection_key_name(set_test_database):
 def test_get_data_with_injection_table_name(set_test_database):
     response = client.get("/test; DROP TABLE test")
     assert response.status_code == 404
+
+
+def test_post_data(set_test_database):
+    response = client.post("/test", json={"id": 3, "name": "Charlie", "age": 35})
+    assert response.status_code == 201
+    print(response.json())
+    assert response.json() == {"id": 3, "name": "Charlie", "age": 35}
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+            {"id": 3, "name": "Charlie", "age": 35},
+        ]
+    }
+
+
+def test_post_data_with_invalid_table(set_test_database):
+    response = client.post("/invalid", json={"name": "Charlie", "age": 35})
+    assert response.status_code == 404
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_post_data_with_invalid_columns(set_test_database):
+    response = client.post("/test", json={"name": "Charlie", "invalid": 35})
+    assert response.status_code == 400
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }
+
+
+def test_post_data_with_injection(set_test_database):
+    response = client.post("/test", json={"name": "Charlie", "age": 35, "invalid": 35})
+    assert response.status_code == 400
+
+    response = client.get("/test")
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }

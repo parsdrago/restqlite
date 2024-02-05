@@ -6,6 +6,7 @@ This module contains the FastAPI application and the main function to run the se
 import sqlite3
 
 from fastapi import Depends, FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from uvicorn import run
 
 app = FastAPI()
@@ -66,6 +67,46 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     data = cursor.fetchall()
     conn.close()
     return {"data": [dict(row) for row in data]}
+
+
+@app.post("/{table_name}")
+async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
+    """Insert data into a table in the database.
+
+    Args:
+        table_name (str): The name of the table.
+        request (Request): The request object.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        Response: The response object. If the table does not exist, return 404. If the data contains invalid columns, return 400. Otherwise, return 201 with the inserted data.
+    """
+    cursor = conn.cursor()
+
+    # check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    data = await request.json()
+
+    # check if the data contains valid columns
+    valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
+    for key in data.keys():
+        if key not in valid_columns:
+            conn.close()
+            return Response(status_code=400)
+
+    columns = ", ".join(data.keys())
+    placeholders = ", ".join(["?"] * len(data))
+    cursor.execute(
+        f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})",
+        list(data.values()),
+    )
+    conn.commit()
+    conn.close()
+    return JSONResponse(status_code=201, content=data)
 
 
 if __name__ == "__main__":
