@@ -18,6 +18,8 @@ def create_test_db():
     cursor.execute("INSERT INTO test (name, age) VALUES ('Alice', 25)")
     cursor.execute("INSERT INTO test (name, age) VALUES ('Bob', 30)")
     conn.commit()
+    cursor.execute("CREATE TABLE _users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)")
+    conn.commit()
     conn.close()
 
 
@@ -252,3 +254,14 @@ def test_delete_data_with_invalid_id(set_test_database):
             {"id": 2, "name": "Bob", "age": 30},
         ]
     }
+
+
+def test_signup_and_login(set_test_database):
+    response = client.post("/signup?username=admin&password=admin")
+    assert response.status_code == 201
+
+    response = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert response.status_code == 200
+    assert "access_token" in response.json()
+    assert "token_type" in response.json()
+    assert response.json()["token_type"] == "bearer"

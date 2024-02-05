@@ -10,7 +10,20 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from uvicorn import run
 
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+from datetime import datetime, timedelta, UTC
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+
 app = FastAPI()
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# JWTトークンの生成
+SECRET_KEY = "your_secret_key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 DATABASE_PATH = None
 
@@ -24,6 +37,91 @@ def get_db():
     conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@app.post("/signup")
+async def signup(username: str, password: str, conn=Depends(get_db)):
+    """Insert data into a table in the database.
+
+    Args:
+        table_name (str): The name of the table.
+        request (Request): The request object.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        Response: 201 if successful, 404 if the table does not exist, or 400 if the data contains invalid columns.
+    """
+    cursor = conn.cursor()
+
+    # check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    hashed_password = pwd_context.hash(password)
+    cursor.execute(
+        f"INSERT INTO _users (username, password) VALUES (?, ?)",
+        (username, hashed_password),
+    )
+    conn.commit()
+    conn.close()
+    return Response(status_code=201)
+
+
+def create_access_token(data: dict, expires_delta: timedelta):
+    """Create an access token.
+
+    Args:
+        data (dict): The data to encode into the token.
+        expires_delta (timedelta): The expiration time of the token.
+
+    Returns:
+        str: The access token.
+    """
+    to_encode = data.copy()
+    expire = datetime.now(UTC) + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+@app.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), conn=Depends(get_db)):
+    """Get data from a table in the database.
+
+    Args:
+        table_name (str): The name of the table.
+        request (Request): The request object.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        Response: The response object. If the table does not exist, return 404. If the query parameters are invalid, return 400. Otherwise, return the data.
+    """
+    cursor = conn.cursor()
+
+    # check if table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if not cursor.fetchone():
+        conn.close()
+        return Response(status_code=404)
+
+    cursor.execute(f"SELECT * FROM _users WHERE username=?", (form_data.username,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return Response(status_code=404)
+
+    if not pwd_context.verify(form_data.password, user["password"]):
+        conn.close()
+        return Response(status_code=404)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+    conn.close()
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/{table_name}")
