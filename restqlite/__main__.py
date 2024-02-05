@@ -3,6 +3,7 @@
 This module contains the FastAPI application and the main function to run the server.
 """
 
+import argparse
 import sqlite3
 
 from fastapi import Depends, FastAPI, Request, Response
@@ -11,7 +12,7 @@ from uvicorn import run
 
 app = FastAPI()
 
-DATABASE_PATH = "test.db"
+DATABASE_PATH = None
 
 
 def get_db():
@@ -109,5 +110,33 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
     return JSONResponse(status_code=201, content=data)
 
 
+def main():
+    global DATABASE_PATH
+
+    parser = argparse.ArgumentParser(description="Run the restqlite server.")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="The host to bind the server to.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="The port to bind the server to.",
+    )
+    parser.add_argument(
+        "--database",
+        type=str,
+        default="database.db",
+        help="The path to the SQLite database file.",
+    )
+    args = parser.parse_args()
+
+    DATABASE_PATH = args.database
+    run(app, host=args.host, port=args.port)
+
+
 if __name__ == "__main__":
-    run(app, host="0.0.0.0")
+    main()
