@@ -345,7 +345,9 @@ def test_put_with_bind_user_id_by_different_user(set_test_database):
     assert response.status_code == 200
     admin_token = response.json()["access_token"]
 
-    response = client.post("/test3", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {admin_token}"})
+    response = client.post(
+        "/test3", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {admin_token}"}
+    )
     assert response.status_code == 201
     assert response.json() == {"id": 1, "name": "Charlie", "age": 35, "user_id": 1}
 
@@ -361,6 +363,7 @@ def test_put_with_bind_user_id_by_different_user(set_test_database):
     )
     assert response.status_code == 401
 
+
 def test_get_with_bind_user_read_only_table(set_test_database):
     response = client.post("/signup?username=admin&password=admin")
     assert response.status_code == 201
@@ -369,7 +372,9 @@ def test_get_with_bind_user_read_only_table(set_test_database):
     assert response.status_code == 200
     admin_token = response.json()["access_token"]
 
-    response = client.post("/test4", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {admin_token}"})
+    response = client.post(
+        "/test4", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {admin_token}"}
+    )
     assert response.status_code == 201
     assert response.json() == {"id": 1, "name": "Charlie", "age": 35, "user_id": 1}
 
@@ -382,15 +387,8 @@ def test_get_with_bind_user_read_only_table(set_test_database):
 
     response = client.get("/test4", headers={"Authorization": f"Bearer {admin2_token}"})
     assert response.status_code == 200
-    assert response.json() == {
-        "data": [
-        ]
-    }
-    
+    assert response.json() == {"data": []}
+
     response = client.get("/test4", headers={"Authorization": f"Bearer {admin_token}"})
     assert response.status_code == 200
-    assert response.json() == {
-        "data": [
-            {"id": 1, "name": "Charlie", "age": 35, "user_id": 1}
-        ]
-    }
+    assert response.json() == {"data": [{"id": 1, "name": "Charlie", "age": 35, "user_id": 1}]}

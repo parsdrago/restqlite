@@ -201,11 +201,10 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     Returns:
         Response: The response object. If the table does not exist, return 404. If the query parameters are invalid, return 400. Otherwise, return the data.
     """
+
     cursor = conn.cursor()
 
-    # check if table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-    if not cursor.fetchone():
+    if not table_exists(cursor, table_name):
         conn.close()
         return Response(status_code=404)
 
@@ -213,53 +212,132 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
         conn.close()
         return Response(status_code=400)
 
-    # check if _users table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
-    if cursor.fetchone():
-        user = (
-            await get_current_user(cursor, request.headers.get("Authorization"))
-            if "Authorization" in request.headers
-            else None
-        )
+    user = await get_user_if_exists(cursor, request)
 
     table_tags = get_tags(table_name, cursor)
 
     if not check_login_required(table_tags, user):
         return Response(status_code=401)
 
-    # check if query parameters are valid
-    valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
     data = dict(request.query_params)
-    for key in data.keys():
-        if key not in valid_columns:
-            conn.close()
-            return Response(status_code=400)
+    valid_columns = get_valid_columns(cursor, table_name)
 
-    if "bind_user_read" in table_tags:
-        if "user_id" in valid_columns:
-            if not user:
-                conn.close()
-                return Response(status_code=400)
-            if "user_id" in data.keys() and user["id"] != data["user_id"]:
-                conn.close()
-                return Response(status_code=401)
-            data["user_id"] = user["id"]
+    if not are_query_params_valid(data, valid_columns):
+        conn.close()
+        return Response(status_code=400)
 
-    # to prevent SQL injection, we use parameterized queries
+    if "bind_user_read" in table_tags and not bind_user_read(data, valid_columns, user):
+        conn.close()
+        return Response(status_code=400)
+
+    data = fetch_data(cursor, table_name, data)
+    conn.close()
+    return {"data": [dict(row) for row in data]}
+
+
+def table_exists(cursor, table_name):
+    """Check if a table exists in the database.
+
+    Args:
+        cursor (sqlite3.Cursor): The database cursor.
+        table_name (str): The name of the table.
+
+    Returns:
+        bool: True if the table exists, otherwise False.
+    """
+
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    return bool(cursor.fetchone())
+
+
+async def get_user_if_exists(cursor, request):
+    """Get the current user if the _users table exists and the user is logged in.
+
+    Args:
+        cursor (sqlite3.Cursor): The database cursor.
+        request (Request): The request object.
+
+    Returns:
+        sqlite3.Row: The user if the user is logged in, otherwise None.
+    """
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if cursor.fetchone():
+        return (
+            await get_current_user(cursor, request.headers.get("Authorization"))
+            if "Authorization" in request.headers
+            else None
+        )
+
+
+def get_valid_columns(cursor, table_name):
+    """Get the valid columns for a table.
+
+    Args:
+        cursor (sqlite3.Cursor): The database cursor.
+        table_name (str): The name of the table.
+
+    Returns:
+        list: The valid columns for the table.
+    """
+
+    return [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
+
+
+def are_query_params_valid(data, valid_columns):
+    """Check if the query parameters are valid.
+
+    Args:
+        data (dict): The query parameters.
+        valid_columns (list): The valid columns for the table.
+
+    Returns:
+        bool: True if the query parameters are valid, otherwise False.
+    """
+
+    return all(key in valid_columns for key in data.keys())
+
+
+def bind_user_read(data, valid_columns, user):
+    """Bind the user to the query parameters.
+
+    Args:
+        data (dict): The query parameters.
+        valid_columns (list): The valid columns for the table.
+        user (sqlite3.Row): The current user.
+
+    Returns:
+        bool: True if the user is bound to the query parameters, otherwise False.
+    """
+
+    if "user_id" in valid_columns:
+        if not user or ("user_id" in data.keys() and user["id"] != data["user_id"]):
+            return False
+        data["user_id"] = user["id"]
+    return True
+
+
+def fetch_data(cursor, table_name, data):
+    """Fetch data from a table in the database.
+
+    Args:
+        cursor (sqlite3.Cursor): The database cursor.
+        table_name (str): The name of the table.
+        data (dict): The query parameters.
+
+    Returns:
+        list: The data from the table.
+    """
+
     if not data:
         cursor.execute(f"SELECT * FROM {table_name}")
-        data = cursor.fetchall()
-        conn.close()
-        return {"data": [dict(row) for row in data]}
+        return cursor.fetchall()
 
     where_clause = " AND ".join([f"{key}=?" for key in data.keys()])
     cursor.execute(
         f"SELECT * FROM {table_name} WHERE {where_clause}",
         list(data.values()),
     )
-    data = cursor.fetchall()
-    conn.close()
-    return {"data": [dict(row) for row in data]}
+    return cursor.fetchall()
 
 
 @app.post("/{table_name}")
@@ -277,8 +355,7 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
     cursor = conn.cursor()
 
     # check if table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-    if not cursor.fetchone():
+    if not table_exists(cursor, table_name):
         conn.close()
         return Response(status_code=404)
 
@@ -289,13 +366,7 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
     data = await request.json()
 
     # check if _users table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
-    if cursor.fetchone():
-        user = (
-            await get_current_user(cursor, request.headers.get("Authorization"))
-            if "Authorization" in request.headers
-            else None
-        )
+    user = await get_user_if_exists(cursor, request)
 
     table_tags = get_tags(table_name, cursor)
 
@@ -303,7 +374,7 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
         return Response(status_code=401)
 
     # check if the data contains valid columns
-    valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
+    valid_columns = get_valid_columns(cursor, table_name)
     for key in data.keys():
         if key not in valid_columns:
             conn.close()
@@ -354,8 +425,7 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
     cursor = conn.cursor()
 
     # check if table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-    if not cursor.fetchone():
+    if not table_exists(cursor, table_name):
         conn.close()
         return Response(status_code=404)
 
@@ -366,13 +436,7 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
     data = await request.json()
 
     # check if _users table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
-    if cursor.fetchone():
-        user = (
-            await get_current_user(cursor, request.headers.get("Authorization"))
-            if "Authorization" in request.headers
-            else None
-        )
+    user = await get_user_if_exists(cursor, request)
 
     table_tags = get_tags(table_name, cursor)
 
@@ -386,7 +450,7 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
         return Response(status_code=404)
 
     # check if the data contains valid columns
-    valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
+    valid_columns = get_valid_columns(cursor, table_name)
     for key in data.keys():
         if key not in valid_columns:
             conn.close()
@@ -434,8 +498,7 @@ async def delete_data(table_name: str, request: Request, id: int, conn=Depends(g
     cursor = conn.cursor()
 
     # check if table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-    if not cursor.fetchone():
+    if not table_exists(cursor, table_name):
         conn.close()
         return Response(status_code=404)
 
@@ -444,13 +507,7 @@ async def delete_data(table_name: str, request: Request, id: int, conn=Depends(g
         return Response(status_code=400)
 
     # check if _users table exists
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
-    if cursor.fetchone():
-        user = (
-            await get_current_user(cursor, request.headers.get("Authorization"))
-            if "Authorization" in request.headers
-            else None
-        )
+    user = await get_user_if_exists(cursor, request)
 
     table_tags = get_tags(table_name, cursor)
 
