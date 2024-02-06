@@ -122,6 +122,7 @@ Here is the data converted into a table format:
 |-----------------|----------------------------------------------------------------------------------------------------------------|
 | login_required  | If set, the user must be logged in to access the table. If not set, the user does not need to be logged in to access the table. |
 | bind_user       | If set, the editing and deleting of the data will be filtered based on the user_id. If user_id column is not present in the table, this setting will be ignored. |
+| bind_user_read  | If set, the reading of the data will be filtered based on the user_id. If user_id column is not present in the table, this setting will be ignored. |
 
 ## License
 

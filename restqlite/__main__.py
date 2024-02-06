@@ -229,22 +229,33 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
 
     # check if query parameters are valid
     valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
-    for key in request.query_params.keys():
+    data = dict(request.query_params)
+    for key in data.keys():
         if key not in valid_columns:
             conn.close()
             return Response(status_code=400)
 
+    if "bind_user_read" in table_tags:
+        if "user_id" in valid_columns:
+            if not user:
+                conn.close()
+                return Response(status_code=400)
+            if "user_id" in data.keys() and user["id"] != data["user_id"]:
+                conn.close()
+                return Response(status_code=401)
+            data["user_id"] = user["id"]
+
     # to prevent SQL injection, we use parameterized queries
-    if not request.query_params:
+    if not data:
         cursor.execute(f"SELECT * FROM {table_name}")
         data = cursor.fetchall()
         conn.close()
         return {"data": [dict(row) for row in data]}
 
-    where_clause = " AND ".join([f"{key}=?" for key in request.query_params.keys()])
+    where_clause = " AND ".join([f"{key}=?" for key in data.keys()])
     cursor.execute(
         f"SELECT * FROM {table_name} WHERE {where_clause}",
-        list(request.query_params.values()),
+        list(data.values()),
     )
     data = cursor.fetchall()
     conn.close()
