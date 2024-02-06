@@ -34,6 +34,10 @@ def create_test_db(db_name):
     cursor.execute("CREATE TABLE _table_settings (id INTEGER PRIMARY KEY, table_name TEXT, tag TEXT)")
     cursor.execute("INSERT INTO _table_settings (table_name, tag) VALUES ('test2', 'login_required')")
     conn.commit()
+    cursor.execute("CREATE TABLE test3 (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, user_id INTEGER)")
+    cursor.execute("INSERT INTO _table_settings (table_name, tag) VALUES ('test3', 'login_required')")
+    cursor.execute("INSERT INTO _table_settings (table_name, tag) VALUES ('test3', 'bind_user')")
+    conn.commit()
     conn.close()
 
 
@@ -308,3 +312,46 @@ def test_get_with_login_required_table_with_token(set_test_database):
             {"id": 2, "name": "Bob", "age": 30},
         ]
     }
+
+
+def test_get_with_bind_user_id_table(set_test_database):
+    response = client.get("/test3")
+    assert response.status_code == 401
+
+
+def test_post_with_bind_user_id_table_with_token(set_test_database):
+    response = client.post("/signup?username=admin&password=admin")
+    assert response.status_code == 201
+
+    response = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+
+    response = client.post("/test3", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 201
+    assert response.json() == {"id": 1, "name": "Charlie", "age": 35, "user_id": 1}
+
+
+def test_put_with_bind_user_id_by_different_user(set_test_database):
+    response = client.post("/signup?username=admin&password=admin")
+    assert response.status_code == 201
+
+    response = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert response.status_code == 200
+    admin_token = response.json()["access_token"]
+
+    response = client.post("/test3", json={"name": "Charlie", "age": 35}, headers={"Authorization": f"Bearer {admin_token}"})
+    assert response.status_code == 201
+    assert response.json() == {"id": 1, "name": "Charlie", "age": 35, "user_id": 1}
+
+    response = client.post("/signup?username=admin2&password=admin")
+    assert response.status_code == 201
+
+    response = client.post("/login", data={"username": "admin2", "password": "admin"})
+    assert response.status_code == 200
+    admin2_token = response.json()["access_token"]
+
+    response = client.put(
+        "/test3/1", json={"name": "Bob", "age": 26}, headers={"Authorization": f"Bearer {admin2_token}"}
+    )
+    assert response.status_code == 401

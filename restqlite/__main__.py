@@ -155,30 +155,38 @@ async def get_current_user(cursor, token: str = Depends(oauth2_scheme)):
     return user
 
 
-def check_login_required(table_name: str, user, conn: sqlite3.Connection):
+def get_tags(table_name: str, cursor: sqlite3.Connection):
+    """Get the tags for a table.
+
+    Args:
+        table_name (str): The name of the table.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        list: The tags for the table.
+    """
+
+    # first, check if the table has a _table_settings table
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_table_settings",))
+    if not cursor.fetchone():
+        return []
+
+    cursor.execute(f"SELECT * FROM _table_settings WHERE table_name=?", (table_name,))
+    return [row["tag"] for row in cursor.fetchall()]
+
+
+def check_login_required(table_tags: [str], user):
     """Check if login is required for a table.
 
     Args:
         table_name (str): The name of the table.
         user (sqlite3.Row): The current user.
-        conn (sqlite3.Connection): The database connection.
 
     Returns:
         bool: True if login is not required or the user is logged in, otherwise False.
     """
-    # check if login is required for the table
-    cursor = conn.cursor()
 
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_table_settings",))
-    if cursor.fetchone():
-        # then, check if the table requires login
-        cursor.execute(f"SELECT * FROM _table_settings WHERE table_name=?", (table_name,))
-        table_settings = [row["tag"] for row in cursor.fetchall()]
-        if "login_required" in table_settings and not user:
-            conn.close()
-            return False
-
-    return True
+    return "login_required" not in table_tags or user
 
 
 @app.get("/{table_name}")
@@ -214,7 +222,9 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
             else None
         )
 
-    if not check_login_required(table_name, user, conn):
+    table_tags = get_tags(table_name, cursor)
+
+    if not check_login_required(table_tags, user):
         return Response(status_code=401)
 
     # check if query parameters are valid
@@ -276,7 +286,9 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
             else None
         )
 
-    if not check_login_required(table_name, user, conn):
+    table_tags = get_tags(table_name, cursor)
+
+    if not check_login_required(table_tags, user):
         return Response(status_code=401)
 
     # check if the data contains valid columns
@@ -285,6 +297,17 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
         if key not in valid_columns:
             conn.close()
             return Response(status_code=400)
+
+    # check if user_id column exists
+    if "bind_user" in table_tags:
+        if "user_id" in valid_columns:
+            if not user:
+                conn.close()
+                return Response(status_code=400)
+            if "user_id" in data and user["id"] != data["user_id"]:
+                conn.close()
+                return Response(status_code=401)
+            data["user_id"] = user["id"]
 
     columns = ", ".join(data.keys())
     placeholders = ", ".join(["?"] * len(data))
@@ -340,7 +363,9 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
             else None
         )
 
-    if not check_login_required(table_name, user, conn):
+    table_tags = get_tags(table_name, cursor)
+
+    if not check_login_required(table_tags, user):
         return Response(status_code=401)
 
     # check if the row exists
@@ -355,6 +380,18 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
         if key not in valid_columns:
             conn.close()
             return Response(status_code=400)
+
+    if "bind_user" in table_tags:
+        if "user_id" in valid_columns:
+            if not user:
+                conn.close()
+                return Response(status_code=400)
+            cursor.execute(f"SELECT user_id FROM {table_name} WHERE id=?", (id,))
+            row = cursor.fetchone()
+            if user["id"] != row["user_id"]:
+                conn.close()
+                return Response(status_code=401)
+            data["user_id"] = user["id"]
 
     set_clause = ", ".join([f"{key}=?" for key in data.keys()])
     cursor.execute(
@@ -404,7 +441,9 @@ async def delete_data(table_name: str, request: Request, id: int, conn=Depends(g
             else None
         )
 
-    if not check_login_required(table_name, user, conn):
+    table_tags = get_tags(table_name, cursor)
+
+    if not check_login_required(table_tags, user):
         return Response(status_code=401)
 
     # check if the row exists
@@ -412,6 +451,17 @@ async def delete_data(table_name: str, request: Request, id: int, conn=Depends(g
     if not cursor.fetchone():
         conn.close()
         return Response(status_code=404)
+
+    if "bind_user" in table_tags:
+        if "user_id" in [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]:
+            if not user:
+                conn.close()
+                return Response(status_code=400)
+            cursor.execute(f"SELECT user_id FROM {table_name} WHERE id=?", (id,))
+            row = cursor.fetchone()
+            if user["id"] != row["user_id"]:
+                conn.close()
+                return Response(status_code=401)
 
     cursor.execute(f"DELETE FROM {table_name} WHERE id=?", (id,))
     conn.commit()
