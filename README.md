@@ -70,6 +70,54 @@ You can interact with the database using the following RESTful API:
 
 - **Delete item**: `DELETE /items/1`
 
+## User Management
+
+restqlite provides a simple user management system. Users are stored in a SQLite database with the following schema:
+
+```sql
+CREATE TABLE _users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL
+);
+```
+
+Users can sin up and log in using the following RESTful API:
+
+- **Sign up**: `POST /signup`
+
+```json
+{
+    "username": "admin",
+    "password": "admin"
+}
+```
+
+- **Login**: `POST /login`
+
+```json
+{
+    "username": "admin",
+    "password": "admin"
+}
+```
+
+If the username and password are correct, the server will respond with a JSON Web Token (JWT) that can be used to authenticate future requests.
+
+For each table containing user_id column, restqlite will automatically add the user_id to the request based on the JWT.
+You can also use the user_id in the request to filter the data based on the user_id if you want to. The setting can be changed in _table_settings table.
+
+```sql
+CREATE TABLE _table_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    table_name TEXT NOT NULL,
+    tag TEXT NOT NULL,
+);
+```
+
+tags can be one of the following:
+- login_required: If set, the user must be logged in to access the table. If not set, the user does not need to be logged in to access the table.
+
 ## License
 
 restqlite is licensed under the MIT License. See [LICENSE](LICENSE) for the full license text.
