@@ -27,6 +27,13 @@ def create_test_db(db_name):
     conn.commit()
     cursor.execute("CREATE TABLE _users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)")
     conn.commit()
+    cursor.execute("CREATE TABLE test2 (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+    cursor.execute("INSERT INTO test2 (name, age) VALUES ('Alice', 25)")
+    cursor.execute("INSERT INTO test2 (name, age) VALUES ('Bob', 30)")
+    conn.commit()
+    cursor.execute("CREATE TABLE _table_settings (id INTEGER PRIMARY KEY, table_name TEXT, tag TEXT)")
+    cursor.execute("INSERT INTO _table_settings (table_name, tag) VALUES ('test2', 'login_required')")
+    conn.commit()
     conn.close()
 
 
@@ -277,3 +284,27 @@ def test_signup_and_login(set_test_database):
 def test_signin_with_unregistered_user(set_test_database):
     response = client.post("/login", data={"username": "admin", "password": "admin"})
     assert response.status_code == 401
+
+
+def test_get_with_login_required_table(set_test_database):
+    response = client.get("/test2")
+    assert response.status_code == 401
+
+
+def test_get_with_login_required_table_with_token(set_test_database):
+    response = client.post("/signup?username=admin&password=admin")
+    assert response.status_code == 201
+
+    response = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+
+    response = client.get("/test2", headers={"Authorization": f"Bearer {token}"})
+    print(response.content)
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": 1, "name": "Alice", "age": 25},
+            {"id": 2, "name": "Bob", "age": 30},
+        ]
+    }

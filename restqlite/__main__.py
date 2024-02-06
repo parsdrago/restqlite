@@ -20,12 +20,13 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWTトークンの生成
 SECRET_KEY = "your_secret_key"
-ALGORITHM = "HS256"
+ALGORITHM = "HS512"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 DATABASE_PATH = None
 
-RESERVED_TABLES = ["sqlite_master", "sqlite_sequence", "_users"]
+RESERVED_TABLES = ["sqlite_master", "sqlite_sequence", "_users", "_table_settings"]
+
 
 def get_db():
     """Get a connection to the database.
@@ -121,6 +122,65 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), conn=Depends(g
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+async def get_current_user(cursor, token: str = Depends(oauth2_scheme)):
+    """Get the current user from the token.
+
+    Args:
+        token (str): The access token.
+
+    Returns:
+        sqlite3.Row: The user.
+
+    Raises:
+        HTTPException: If the token is invalid.
+    """
+
+    try:
+        token = token.split("Bearer ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+
+    cursor.execute(f"SELECT * FROM _users WHERE username=?", (username,))
+    user = cursor.fetchone()
+
+    if user is None:
+        return None
+    return user
+
+
+def check_login_required(table_name: str, user, conn: sqlite3.Connection):
+    """Check if login is required for a table.
+
+    Args:
+        table_name (str): The name of the table.
+        user (sqlite3.Row): The current user.
+        conn (sqlite3.Connection): The database connection.
+
+    Returns:
+        bool: True if login is not required or the user is logged in, otherwise False.
+    """
+    # check if login is required for the table
+    cursor = conn.cursor()
+
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_table_settings",))
+    if cursor.fetchone():
+        # then, check if the table requires login
+        cursor.execute(f"SELECT * FROM _table_settings WHERE table_name=?", (table_name,))
+        table_settings = [row["tag"] for row in cursor.fetchall()]
+        if "login_required" in table_settings and not user:
+            conn.close()
+            return False
+
+    return True
+
+
 @app.get("/{table_name}")
 async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     """Get data from a table in the database.
@@ -144,6 +204,18 @@ async def get_data(table_name: str, request: Request, conn=Depends(get_db)):
     if table_name in RESERVED_TABLES:
         conn.close()
         return Response(status_code=400)
+
+    # check if _users table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if cursor.fetchone():
+        user = (
+            await get_current_user(cursor, request.headers.get("Authorization"))
+            if "Authorization" in request.headers
+            else None
+        )
+
+    if not check_login_required(table_name, user, conn):
+        return Response(status_code=401)
 
     # check if query parameters are valid
     valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
@@ -194,6 +266,18 @@ async def insert_data(table_name: str, request: Request, conn=Depends(get_db)):
         return Response(status_code=400)
 
     data = await request.json()
+
+    # check if _users table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if cursor.fetchone():
+        user = (
+            await get_current_user(cursor, request.headers.get("Authorization"))
+            if "Authorization" in request.headers
+            else None
+        )
+
+    if not check_login_required(table_name, user, conn):
+        return Response(status_code=401)
 
     # check if the data contains valid columns
     valid_columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")]
@@ -247,6 +331,18 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
 
     data = await request.json()
 
+    # check if _users table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if cursor.fetchone():
+        user = (
+            await get_current_user(cursor, request.headers.get("Authorization"))
+            if "Authorization" in request.headers
+            else None
+        )
+
+    if not check_login_required(table_name, user, conn):
+        return Response(status_code=401)
+
     # check if the row exists
     cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
     if not cursor.fetchone():
@@ -276,7 +372,7 @@ async def update_data(table_name: str, id: int, request: Request, conn=Depends(g
 
 
 @app.delete("/{table_name}/{id}")
-async def delete_data(table_name: str, id: int, conn=Depends(get_db)):
+async def delete_data(table_name: str, request: Request, id: int, conn=Depends(get_db)):
     """Delete data from a table in the database.
 
     Args:
@@ -298,6 +394,18 @@ async def delete_data(table_name: str, id: int, conn=Depends(get_db)):
     if table_name in RESERVED_TABLES:
         conn.close()
         return Response(status_code=400)
+
+    # check if _users table exists
+    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("_users",))
+    if cursor.fetchone():
+        user = (
+            await get_current_user(cursor, request.headers.get("Authorization"))
+            if "Authorization" in request.headers
+            else None
+        )
+
+    if not check_login_required(table_name, user, conn):
+        return Response(status_code=401)
 
     # check if the row exists
     cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (id,))
