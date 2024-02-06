@@ -272,3 +272,8 @@ def test_signup_and_login(set_test_database):
     assert "access_token" in response.json()
     assert "token_type" in response.json()
     assert response.json()["token_type"] == "bearer"
+
+
+def test_signin_with_unregistered_user(set_test_database):
+    response = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert response.status_code == 401

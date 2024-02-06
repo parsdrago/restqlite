@@ -109,11 +109,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), conn=Depends(g
     user = cursor.fetchone()
     if not user:
         conn.close()
-        return Response(status_code=404)
+        return Response(status_code=401)
 
     if not pwd_context.verify(form_data.password, user["password"]):
         conn.close()
-        return Response(status_code=404)
+        return Response(status_code=401)
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": form_data.username}, expires_delta=access_token_expires)
