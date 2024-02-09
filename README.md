@@ -4,13 +4,15 @@
 >
 > This project is under development and is not ready for production use. This may contain bugs and security vulnerabilities. Use at your own risk.
 
-restqlite is a simple REST API for SQLite databases. It is a thin layer over SQLite and provides a RESTful interface for interacting with SQLite databases. It is designed to be easy to use and easy to deploy.
+restqlite is a straightforward and user-friendly RESTful interface for SQLite database interactions. Designed for simplicity and ease of deployment, it eliminates the need for coding, making database management accessible to all.
 
 ## Features
 
-- **Simple**: restqlite is designed to be simple and easy to use. It is built on top of SQLite and provides a RESTful interface for interacting with SQLite databases.
+- **Simple**: Built atop SQLite, restqlite simplifies database interactions through a RESTful interface, streamlining both use and deployment.
 
-- **RESTful**: restqlite provides a RESTful interface for interacting with SQLite databases. It is designed to be easy to use and easy to deploy.
+- **RESTful**: By leveraging standard web technologies, restqlite's RESTful interface facilitates seamless database operations, enhancing accessibility and integration capabilities.
+
+- **No code required**: With restqlite, no coding is needed. Just provide the path to your SQLite database file, and restqlite handles the rest. Settings can be easily configured directly within the database, promoting a user-friendly experience for rapid deployment and management.
 
 
 ## Quick Start
